@@ -107,13 +107,30 @@ local function inflate_deflate(init)
 			strm.next_out, strm.avail_out = buf, bufsize
 		end
 
-		local data, size --data must be anchored as an upvalue!
-		while true do
-			if strm.avail_in == 0 then --input buffer empty: refill
-				data, size = read()
-				if not data then --eof: finish up
-					local ret
-					repeat
+        local tlen, tfin
+        local data, size -- data must be anchored as an upvalue!
+        local slice_data -- if zip data is list, call write multi times.
+        while true do
+            if strm.avail_in == 0 then --input buffer empty: refill
+
+                if tlen == 0 or type(slice_data) ~= 'table' then
+                    slice_data = nil
+                    data, size = read()
+                    if type(data) == 'table' then
+                        -- trigger slice_data machanism.
+                        slice_data = data
+                        tlen = #slice_data
+                        tfin = tlen
+                    end
+                end
+
+                if type(slice_data) == 'table' then
+                    data = slice_data[tfin - tlen + 1]
+                    tlen = tlen - 1
+                end
+
+                if not data then --eof: finish up
+                    repeat
 						flush()
 					until not flate(strm, C.Z_FINISH)
 					flush()
